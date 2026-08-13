@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Forecast and training data
+CFSv2/
+original_forecast/
+coeff/
+rt_output/
+PNG/
+cb_2018_us_state_500k/
+precip_profile/
+
+# NetCDF, GRIB and model data
+*.nc
+*.nc4
+*.grb
+*.grb2
+*.idx
+*.sav
+
+# Logs and temporary files
+*.log
+nohup.out
+d.log
+*.part
+*.tmp
+*.tmp.nc
+
+# Generated figures
+*.png
+*.pdf
+
+# Editors
+.vscode/
+.idea/
+*~
