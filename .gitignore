@@ -3,14 +3,35 @@ __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 
-# Forecast and training data
-CFSv2/
-original_forecast/
-coeff/
-rt_output/
-PNG/
-cb_2018_us_state_500k/
-precip_profile/
+# Forecast, training and output directories
+# Ignore their contents, but keep the directory tree through .gitkeep files.
+CFSv2/**
+!CFSv2/**/
+!CFSv2/**/.gitkeep
+
+original_forecast/**
+!original_forecast/**/
+!original_forecast/**/.gitkeep
+
+coeff/**
+!coeff/**/
+!coeff/**/.gitkeep
+
+rt_output/**
+!rt_output/**/
+!rt_output/**/.gitkeep
+
+PNG/**
+!PNG/**/
+!PNG/**/.gitkeep
+
+cb_2018_us_state_500k/**
+!cb_2018_us_state_500k/**/
+!cb_2018_us_state_500k/**/.gitkeep
+
+precip_profile/**
+!precip_profile/**/
+!precip_profile/**/.gitkeep
 
 # NetCDF, GRIB and model data
 *.nc

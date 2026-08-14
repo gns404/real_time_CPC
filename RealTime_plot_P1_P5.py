@@ -1,4 +1,5 @@
 from pathlib import Path
+import argparse
 import pickle
 from datetime import datetime, timedelta
 import numpy as np
@@ -18,7 +19,7 @@ from shapely.geometry import box
 
 GRAVITY = 9.80665
 N_WT = 5
-PERIODS = (1, 5)
+PERIODS = range(1,6)
 N_LEADS = 4  # retained only for unused monthly-WR plotting helpers below
 
 BASE_DIR = Path('/work05/home/jihun/real_time_CPC')
@@ -52,10 +53,10 @@ init_date = f"{year}{month:02d}01"
 init_date
 
 def open_dataarray(path, var_name=None):
-    ds = xr.open_dataset(path)
-    if var_name and var_name in ds.data_vars:
-        return ds[var_name]
-    return ds[next(iter(ds.data_vars))]
+    with xr.open_dataset(path) as ds:
+        if var_name and var_name in ds.data_vars:
+            return ds[var_name].load()
+        return ds[next(iter(ds.data_vars))].load()
 
 def load_gmm():
     with open(GMM_PATH, 'rb') as handle:
@@ -77,16 +78,26 @@ def load_precip_profile(month, wt):
 
 def get_period(init_date, period):
     init_month = pd.Timestamp(init_date)
+
     if period == 1:
-        return init_month + pd.DateOffset(days=15), init_month + pd.offsets.MonthEnd(0)
-    if period == 5:
+        start = init_month + pd.DateOffset(days=15)
+        end = init_month + pd.offsets.MonthEnd(0)
+    elif period == 2:
+        start = init_month + pd.DateOffset(months=1)
+        end = start + pd.offsets.MonthEnd(0)
+    elif period == 3:
+        start = init_month + pd.DateOffset(months=2)
+        end = start + pd.offsets.MonthEnd(0)
+    elif period == 4:
+        start = init_month + pd.DateOffset(months=3)
+        end = start + pd.offsets.MonthEnd(0)
+    elif period == 5:
         start = init_month + pd.DateOffset(months=1)
         end = init_month + pd.DateOffset(months=3) + pd.offsets.MonthEnd(0)
-        return start, end
-    raise ValueError(period)
 
-def open_grib_dataarray(path, field):
-    ds = xr.open_dataset(path, engine='cfgrib', backend_kwargs={'indexpath': ''})
+    return start, end
+
+def get_grib_dataarray(ds, field):
     candidates = ('prate', 'tp') if field == 'tp' else ('gh', 'z')
     for name in candidates:
         if name in ds:
@@ -103,19 +114,22 @@ def load_cfsv2_z500(init_date):
     members = []
     for member in CFSV2_MEMBERS:
         path = RAW_DIR / init_date / 'z500' / f'z500.{init_date[:6]}{member}.grb2'
-        da = open_grib_dataarray(path, 'z500')
-        valid_time = pd.to_datetime(da.valid_time.values)
-        da = da.rename({
-            'latitude': 'lat',
-            'longitude': 'lon',
-            'step': 'forecast_step',
-        })
-        da = da.drop_vars(['time', 'valid_time'], errors='ignore')
-        da = da.assign_coords(time=('forecast_step', valid_time))
-        da = da.swap_dims({'forecast_step': 'time'}).drop_vars('forecast_step')
-        da = da.assign_coords(lon=to_minus180(da.lon)).sortby('lon').sortby('lat')
-        da = da.sel(lat=slice(-5, 65), lon=slice(-150, -50))
-        da = da.resample(time='1D').mean()
+        with xr.open_dataset(
+            path, engine='cfgrib', backend_kwargs={'indexpath': ''}
+        ) as ds:
+            da = get_grib_dataarray(ds, 'z500')
+            valid_time = pd.to_datetime(da.valid_time.values)
+            da = da.rename({
+                'latitude': 'lat',
+                'longitude': 'lon',
+                'step': 'forecast_step',
+            })
+            da = da.drop_vars(['time', 'valid_time'], errors='ignore')
+            da = da.assign_coords(time=('forecast_step', valid_time))
+            da = da.swap_dims({'forecast_step': 'time'}).drop_vars('forecast_step')
+            da = da.assign_coords(lon=to_minus180(da.lon)).sortby('lon').sortby('lat')
+            da = da.sel(lat=slice(-5, 65), lon=slice(-150, -50))
+            da = da.resample(time='1D').mean().load()
         members.append(da.expand_dims(ensemble=[member]))
     return xr.concat(members, dim='ensemble')
 
@@ -123,19 +137,24 @@ def load_cfsv2_tp(init_date):
     members = []
     for member in CFSV2_MEMBERS:
         path = RAW_DIR / init_date / 'tp' / f'prate.{init_date[:6]}{member}.grb2'
-        da = open_grib_dataarray(path, 'tp')
-        valid_time = pd.to_datetime(da.valid_time.values)
-        da = da.rename({
-            'latitude': 'lat',
-            'longitude': 'lon',
-            'step': 'forecast_step',
-        })
-        da = da.drop_vars(['time', 'valid_time'], errors='ignore')
-        da = da.assign_coords(time=('forecast_step', valid_time))
-        da = da.swap_dims({'forecast_step': 'time'}).drop_vars('forecast_step')
-        da = da.sortby('lon').sortby('lat').sel(lat=slice(19, 51), lon=slice(228, 307))
-        da = (da * 86400.0).resample(time='1D').mean()
-        da.name = 'precip'
+        with xr.open_dataset(
+            path, engine='cfgrib', backend_kwargs={'indexpath': ''}
+        ) as ds:
+            da = get_grib_dataarray(ds, 'tp')
+            valid_time = pd.to_datetime(da.valid_time.values)
+            da = da.rename({
+                'latitude': 'lat',
+                'longitude': 'lon',
+                'step': 'forecast_step',
+            })
+            da = da.drop_vars(['time', 'valid_time'], errors='ignore')
+            da = da.assign_coords(time=('forecast_step', valid_time))
+            da = da.swap_dims({'forecast_step': 'time'}).drop_vars('forecast_step')
+            da = da.sortby('lon').sortby('lat').sel(
+                lat=slice(20, 50), lon=slice(230, 305)
+            )
+            da = (da * 86400.0).resample(time='1D').mean().load()
+            da.name = 'precip'
         members.append(da.expand_dims(ensemble=[member]))
     return xr.concat(members, dim='ensemble')
 
@@ -148,9 +167,7 @@ def regrid_to_core_grid(z500_daily, core_clim):
     return z500_daily.transpose('ensemble', 'time', 'latitude', 'longitude')
 
 def regrid_tp_to_obs_grid(tp_daily, obs_grid):
-    return tp_daily.rename(lat='latitude', lon='longitude').transpose(
-        'ensemble', 'time', 'latitude', 'longitude'
-    )
+    return tp_daily.rename(lat='latitude', lon='longitude').transpose('ensemble', 'time', 'latitude', 'longitude')
 
 def make_daily_anomaly(z500_daily_rg, core_clim):
     day_index = z500_daily_rg.time.dt.dayofyear.values.astype(int) - 1
@@ -256,8 +273,8 @@ def compute_tercile_probabilities(period_precip, model):
     mean_prob = member_prob.mean(dim='ensemble').rename('tercile_probability')
     return member_prob, mean_prob
 
-def run_model(model, init_date, save=True):
-    out_dir = OUTPUT_DIR / init_date / model
+def run_cfsv2(init_date, save=True):
+    out_dir = OUTPUT_DIR / init_date / MODEL_NAME
     out_dir.mkdir(parents=True, exist_ok=True)
 
     z500_daily = load_cfsv2_z500(init_date)
@@ -269,11 +286,14 @@ def run_model(model, init_date, save=True):
     monthly_precip = aggregate_periods(precip_wrgmm, init_date)
     print('Done: WRGMM precip process')
     raw_tp_daily = load_cfsv2_tp(init_date)
-    raw_tp_regrid = regrid_tp_to_obs_grid(raw_tp_daily, obs_grid)
-    raw_tp_monthly = aggregate_periods(raw_tp_regrid, init_date)
+    raw_tp_daily = regrid_tp_to_obs_grid(raw_tp_daily, obs_grid)
+    raw_tp_daily = raw_tp_daily.assign_coords(latitude=hist_r.latitude, longitude=hist_r.longitude,)
+    raw_tp_monthly = aggregate_periods(raw_tp_daily, init_date)
     print('Done: raw precip process')
     blended_monthly = build_blended_monthly_precip(raw_tp_monthly, monthly_precip, hist_r)
-    blended_member, blended_mean = compute_tercile_probabilities(blended_monthly, model)
+    blended_member, blended_mean = compute_tercile_probabilities(
+        blended_monthly, MODEL_NAME
+    )
     
     outputs = {
         'wt_probability': wt_probability,
@@ -285,12 +305,12 @@ def run_model(model, init_date, save=True):
     }
 
     if save:
-        wt_probability.to_netcdf(out_dir / f'{model}_{init_date}_wt_probability.nc')
-        monthly_precip.to_netcdf(out_dir / f'{model}_{init_date}_precip_wrgmm_monthly.nc')
-        raw_tp_monthly.to_netcdf(out_dir / f'{model}_{init_date}_precip_raw_monthly.nc')
-        blended_monthly.to_netcdf(out_dir / f'{model}_{init_date}_precip_exwrgmm_monthly.nc')
-        blended_member.to_netcdf(out_dir / f'{model}_{init_date}_tercile_probability_member.nc')
-        blended_mean.to_netcdf(out_dir / f'{model}_{init_date}_tercile_probability_mean.nc')
+        wt_probability.to_netcdf(out_dir / f'{MODEL_NAME}_{init_date}_wt_probability.nc')
+        monthly_precip.to_netcdf(out_dir / f'{MODEL_NAME}_{init_date}_precip_wrgmm_monthly.nc')
+        raw_tp_monthly.to_netcdf(out_dir / f'{MODEL_NAME}_{init_date}_precip_raw_monthly.nc')
+        blended_monthly.to_netcdf(out_dir / f'{MODEL_NAME}_{init_date}_precip_exwrgmm_monthly.nc')
+        blended_member.to_netcdf(out_dir / f'{MODEL_NAME}_{init_date}_tercile_probability_member.nc')
+        blended_mean.to_netcdf(out_dir / f'{MODEL_NAME}_{init_date}_tercile_probability_mean.nc')
 
     return outputs
 
@@ -298,9 +318,6 @@ core_clim = load_core_climatology()
 hist_r = load_hist_r_weight()
 obs_grid = open_dataarray(OBS_CLIM_PATH, 'precip')
 gmm = load_gmm()
-
-results = {MODEL_NAME: run_model(MODEL_NAME, init_date, save=True)}
-
 
 def build_outlook_masks(prob_da, equal_chance_threshold=0.40):
     prob_da = prob_da.transpose('category', 'lat', 'lon')
@@ -328,6 +345,12 @@ def valid_label_from_plot_da(prob_da):
     start = pd.Timestamp(prob_da.target_start.values)
     end = pd.Timestamp(prob_da.target_end.values)
     return f'{start:%B %d, %Y} - {end:%B %d, %Y}'
+
+def issued_label_from_init_date(init_date):
+    init_month = pd.Timestamp(init_date)
+    start = init_month.replace(day=4)
+    end = init_month.replace(day=6)
+    return f'{start:%B %d}–{end:%d, %Y}'
 
 def add_category_label(ax, mask, text):
     valid = mask.where(~np.isnan(mask), drop=True)
@@ -427,93 +450,143 @@ def plot_tercile_outlook(prob_da, model, lead_month, issued_label, equal_chance_
 
     return fig, ax, masks, dominant, max_prob
 
-def monthly_wt_probability(wt_probability, init_date, n_leads=N_LEADS):
-    target_months = get_target_month_starts(init_date, n_leads=n_leads)
-    lead_probs = []
-    for lead_idx, target_month in enumerate(target_months, start=1):
-        start = pd.Timestamp(target_month)
-        end = start + pd.offsets.MonthEnd(0)
-        prob = (wt_probability.sel(time=slice(start, end)).mean(dim=('ensemble', 'time')))
-        prob = prob.expand_dims(lead_month=[lead_idx])
-        prob = prob.assign_coords(target_time=('lead_month', [np.datetime64(start)]))
-        lead_probs.append(prob)
-    out = xr.concat(lead_probs, dim='lead_month')
-    out.name = 'monthly_wt_probability'
-    return out
+def period_wt_probability(wt_probability, init_date):
+    period_probs = []
+
+    for period in PERIODS:
+        start, end = get_period(init_date, period)
+        prob = wt_probability.sel(time=slice(start, end)).mean(
+            dim=('ensemble', 'time')
+        )
+        prob = prob.expand_dims(period=[period])
+        prob = prob.assign_coords(target_start=('period', [np.datetime64(start)]))
+        prob = prob.assign_coords(target_end=('period', [np.datetime64(end)]))
+        period_probs.append(prob)
+
+    output = xr.concat(period_probs, dim='period')
+    output.name = 'period_wt_probability'
+    return output
 
 
-def plot_all_model_wt_probability(results, init_date, model_names=(MODEL_NAME,), n_leads=N_LEADS):
-    fig, axes = plt.subplots(1, len(model_names),figsize=(5.0 * len(model_names), 6),sharey=True)
+def plot_period_wt_probability(wt_probability, init_date, output_dir):
+    wt_period = period_wt_probability(wt_probability, init_date)
+    values = wt_period.transpose('period', 'wt').values * 100.0
+    periods = wt_period.period.values
+    bottom = np.zeros(len(periods))
 
-    if len(model_names) == 1:
-        axes = [axes]
+    fig, ax = plt.subplots(figsize=(9, 7))
 
-    for ax, model in zip(axes, model_names):
-        wt_monthly = monthly_wt_probability(results[model]['wt_probability'],init_date,n_leads=n_leads)
-        values = wt_monthly.transpose('lead_month', 'wt').values * 100.0
-        leads = wt_monthly.lead_month.values
-        bottom = np.zeros(len(leads))
+    for wt in range(1, N_WT + 1):
+        probability = values[:, wt - 1]
+        ax.bar(
+            periods, probability, bottom=bottom,
+            color=WR_COLORS[wt], edgecolor='black', linewidth=1.0,
+            label=WR_LABELS[wt],
+        )
 
-        for wt in range(1, N_WT + 1):
-            vals = values[:, wt - 1]
-            ax.bar(leads,vals,bottom=bottom,color=WR_COLORS[wt],edgecolor='black',linewidth=1.0,label=WR_LABELS[wt])
-            for x, y, b in zip(leads, vals, bottom):
-                if y >= 3:
-                    ax.text(x,b + y / 2,f'{y:.0f}',ha='center',va='center',color='white',fontsize=13,fontweight='bold')
+        for x, value, base in zip(periods, probability, bottom):
+            if value >= 3:
+                ax.text(
+                    x, base + value / 2, f'{value:.0f}',
+                    ha='center', va='center', color='white',
+                    fontsize=13, fontweight='bold',
+                )
+        bottom += probability
 
-            bottom += vals
+    period_labels = []
+    for period, start, end in zip(
+        periods, wt_period.target_start.values, wt_period.target_end.values
+    ):
+        start = pd.Timestamp(start)
+        end = pd.Timestamp(end)
+        period_labels.append(f'P{period}\n{start:%b %d}–{end:%b %d}')
 
-        ax.set_title(model, fontsize=18, fontweight='bold')
-        valid_times = pd.to_datetime(wt_monthly.target_time.values)
-        xticklabels = [f"{t.year}-{t.month:02d}"for t in valid_times]
-        ax.set_xticks(leads)
-        ax.set_xticklabels(xticklabels, fontsize=12)
-        ax.set_ylim(0, 100)
-        ax.grid(axis='y', linestyle=':', alpha=0.5)
-        ax.set_axisbelow(True)
+    ax.set_xticks(periods)
+    ax.set_xticklabels(period_labels, fontsize=11)
+    ax.set_ylim(0, 100)
+    ax.set_ylabel('Weather Regime Probability (%)', fontsize=14)
+    ax.grid(axis='y', linestyle=':', alpha=0.5)
+    ax.set_axisbelow(True)
 
-    axes[0].set_ylabel('Weather Regime Probability (%)', fontsize=14)
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles,labels,loc='upper center',bbox_to_anchor=(0.5, 0.93),ncol=5,fontsize=13,frameon=False)
-    issued_label = pd.Timestamp(init_date).strftime('%B %d, %Y')
-    fig.suptitle(f'Monthly Weather Regime Probability\nIssued: {issued_label}',fontsize=20,fontweight='bold',y=1.03)
-    plt.tight_layout(rect=[0, 0, 1, 0.88])
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(
+        handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.92),
+        ncol=3, fontsize=11, frameon=False,
+    )
+    issued_label = issued_label_from_init_date(init_date)
+    fig.suptitle(
+        f'CFSv2 P1–P5 Weather Regime Probability\nIssued: {issued_label}',
+        fontsize=20, fontweight='bold', y=1.02,
+    )
+    plt.tight_layout(rect=[0, 0, 1, 0.84])
 
-    out_png = batch_png_out_dir / f'All_models_lead1-4_wt_probability_{init_date}.png'
+    out_png = output_dir / f'CFSv2_P1-P5_wt_probability_{init_date}.png'
     fig.savefig(out_png, dpi=300, bbox_inches='tight')
     plt.close(fig)
-
     print(f'Saved: {out_png.name}')
 
-equal_chance_threshold = 0.40
-batch_png_out_dir = BASE_DIR / 'PNG' / init_date
-batch_png_out_dir.mkdir(parents=True, exist_ok=True)
+def plot_cfsv2(results, init_date, equal_chance_threshold=0.40):
+    batch_png_out_dir = BASE_DIR / 'PNG' / init_date
+    batch_png_out_dir.mkdir(parents=True, exist_ok=True)
 
-for batch_model in (MODEL_NAME,):
-    if batch_model not in results:
-        print(f'Skip: {batch_model} not in results')
-        continue
+    plot_period_wt_probability(
+        results['wt_probability'], init_date, batch_png_out_dir
+    )
 
-    available_periods = [int(x) for x in results[batch_model]['tercile_mean'].period.values]
-    for batch_period in available_periods:
-        batch_da = results[batch_model]['tercile_mean'].sel(period=batch_period)
-        batch_issued_label = pd.Timestamp(init_date).strftime('%B %d, %Y')
+    available_periods = [
+        int(value) for value in results['tercile_mean'].period.values
+    ]
+
+    for period in available_periods:
+        plot_data = results['tercile_mean'].sel(period=period)
+        issued_label = issued_label_from_init_date(init_date)
 
         fig, ax, masks, dominant, max_prob = plot_tercile_outlook(
-            batch_da,
-            model=batch_model,
-            lead_month=batch_period,
-            issued_label=batch_issued_label,
+            plot_data,
+            model=MODEL_NAME,
+            lead_month=period,
+            issued_label=issued_label,
             equal_chance_threshold=equal_chance_threshold,
         )
 
-        valid_label = valid_label_from_plot_da(batch_da).replace(' ', '_').replace(',', '').replace('-', 'to')
-        out_png = batch_png_out_dir / f'{batch_model}_P{batch_period}_{valid_label}_tercile_outlook.png'
+        valid_label = valid_label_from_plot_da(plot_data)
+        valid_label = valid_label.replace(' ', '_').replace(',', '').replace('-', 'to')
+        out_png = batch_png_out_dir / (
+            f'{MODEL_NAME}_P{period}_{valid_label}_tercile_outlook.png'
+        )
 
         fig.savefig(out_png, dpi=300, bbox_inches='tight')
-        # fig.savefig(out_pdf, dpi=300, bbox_inches='tight')
         plt.close(fig)
-
         print(f'Saved: {out_png.name}')
 
-# P1/P5 precipitation outlook only. Monthly WR bar plot is not used here.
+
+def load_saved_cfsv2(init_date):
+    out_dir = OUTPUT_DIR / init_date / MODEL_NAME
+    tercile_path = out_dir / f'{MODEL_NAME}_{init_date}_tercile_probability_mean.nc'
+    wt_path = out_dir / f'{MODEL_NAME}_{init_date}_wt_probability.nc'
+    return {
+        'tercile_mean': open_dataarray(tercile_path, 'tercile_probability'),
+        'wt_probability': open_dataarray(wt_path, 'wt_probability'),
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--init-date', default=init_date, help='YYYYMM01')
+    parser.add_argument(
+        '--mode', choices=('all', 'calculate', 'plot'), default='all',
+        help='calculate: coefficients/probability only, plot: use saved result, all: both',
+    )
+    args = parser.parse_args()
+
+    if args.mode in ('all', 'calculate'):
+        results = run_cfsv2(args.init_date, save=True)
+    else:
+        results = load_saved_cfsv2(args.init_date)
+
+    if args.mode in ('all', 'plot'):
+        plot_cfsv2(results, args.init_date)
+
+
+if __name__ == '__main__':
+    main()
