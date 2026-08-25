@@ -1,0 +1,13 @@
+# Tested with Python 3.9.12 in the base Conda environment.
+numpy==1.22.4
+pandas==1.4.2
+xarray==0.20.1
+scipy==1.7.3
+scikit-learn==1.0.2
+netCDF4==1.7.2
+cfgrib==0.9.15.1
+eccodes==2.47.0
+matplotlib==3.5.1
+Cartopy==0.23.0
+Shapely==2.0.7
+cdsapi==0.7.5

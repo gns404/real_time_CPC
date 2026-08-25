@@ -8,11 +8,8 @@ All precipitation data and coefficients use the native CFSv2 Gaussian grid. The 
 
 | Period | Definition |
 |---|---|
-| P1 | Day 16 through the end of the initialization month |
-| P2 | The next calendar month |
-| P3 | The second following calendar month |
-| P4 | The third following calendar month |
-| P5 | Three-month mean from P2 through P4 |
+| P1 | The next calendar month |
+| P2 | Three-month mean from the next through the third following month |
 
 ## File organization
 
@@ -86,7 +83,7 @@ CORe_WRGMM_monthly_precip.1981-2010.nc
 
 #### `Train_5_calculate_coeff_by_member.py`
 
-Processes the 12 CFSv2 initializations independently. For P1–P5, raw CFSv2 precipitation and WRGMM precipitation are blended using the squared historical CPC–WRGMM correlation. Coefficients are calculated after a fourth-root transformation.
+Processes the 12 CFSv2 initializations independently. For P1 and P2, raw CFSv2 precipitation and WRGMM precipitation are blended using the squared historical CPC–WRGMM correlation. Coefficients are calculated after a fourth-root transformation.
 
 Calculated coefficients:
 
@@ -134,18 +131,18 @@ Output layout:
 ```text
 original_forecast/YYYYMM01/
 ├── tp/
-│   └── prate.YYYYMMDDHH.grb2
+│   └── prate.01.YYYYMMDDHH.daily.grb2
 └── z500/
-    └── z500.YYYYMMDDHH.grb2
+    └── z500.01.YYYYMMDDHH.daily.grb2
 ```
 
 ### `RealTime_ecmwf_forecast_download.py`
 
-Downloads ECMWF seasonal total precipitation and Z500 data through the CDS API and stores them under `original_forecast/YYYYMM01/`. ECMWF data are not currently used by the CFSv2 P1–P5 outlook workflow.
+Downloads ECMWF seasonal total precipitation and Z500 data through the CDS API and stores them under `original_forecast/YYYYMM01/`. These files are used by `RealTime_plot_P1_P2_ECMWF.py`.
 
-### `RealTime_plot_P1_P5.py`
+### `RealTime_plot_P1_P2.py`
 
-Calculates and plots P1–P5 weather-regime probabilities and precipitation tercile probabilities from the 12 CFSv2 initializations.
+Calculates and plots P1–P2 weather-regime probabilities and precipitation tercile probabilities from the 12 CFSv2 initializations.
 
 Processing steps:
 
@@ -153,39 +150,47 @@ Processing steps:
 2. Remove the CORe Z500 climatology to calculate daily anomalies.
 3. Calculate daily GMM posterior weather-regime probabilities.
 4. Combine the probabilities with monthly precipitation profiles to reconstruct WRGMM precipitation.
-5. Convert CFSv2 PRATE to `mm day-1` and calculate P1–P5 means.
+5. Convert CFSv2 PRATE to `mm day-1` and calculate the P1 and P2 means.
 6. Apply initialization-specific coefficients to calculate tercile probabilities.
 7. Average the probabilities across the 12 initialization members.
 
 Run the complete calculation and plotting workflow:
 
 ```bash
-python RealTime_plot_P1_P5.py --init-date 20250801 --mode all
+python RealTime_plot_P1_P2.py --init-date 20250801 --mode all
 ```
 
 Run calculations only:
 
 ```bash
-python RealTime_plot_P1_P5.py --init-date 20250801 --mode calculate
+python RealTime_plot_P1_P2.py --init-date 20250801 --mode calculate
 ```
 
 Regenerate figures from saved results:
 
 ```bash
-python RealTime_plot_P1_P5.py --init-date 20250801 --mode plot
+python RealTime_plot_P1_P2.py --init-date 20250801 --mode plot
 ```
 
 Main outputs:
 
 ```text
 rt_output/YYYYMM01/CFSv2/
-PNG/YYYYMM01/CFSv2_P1-P5_wt_probability_YYYYMM01.png
+PNG/YYYYMM01/CFSv2_P1-P2_wt_probability_YYYYMM01.png
 PNG/YYYYMM01/CFSv2_P1_..._tercile_outlook.png
 ...
-PNG/YYYYMM01/CFSv2_P5_..._tercile_outlook.png
+PNG/YYYYMM01/CFSv2_P2_..._tercile_outlook.png
 ```
 
 The `Issued` label on each figure represents the CFSv2 initialization period, days 4–6 of the corresponding month.
+
+### `RealTime_plot_P1_P2_ECMWF.py`
+
+Runs the same P1/P2 outlook workflow for the first 25 ECMWF ensemble members, matching the 25-member ECMWF training coefficients under `coeff/ECMWF/`. It converts accumulated total precipitation to daily precipitation before regridding it to the CFSv2-native CPC grid.
+
+```bash
+python RealTime_plot_P1_P2_ECMWF.py --init-date 20260801 --mode all
+```
 
 ## Example workflow: `Example_*`
 
@@ -211,10 +216,11 @@ real_time_CPC/
 ├── Train_6_plot_clim_figures.py
 ├── RealTime_CFSv2_forecast_download.sh
 ├── RealTime_ecmwf_forecast_download.py
-├── RealTime_plot_P1_P5.py
+├── RealTime_plot_P1_P2.py
+├── RealTime_plot_P1_P2_ECMWF.py
 ├── Example_CFSv2_forecast_download_202508.sh
 ├── CFSv2/                  # Training CFSv2 data
-├── coeff/                  # Member-specific P1–P5 coefficients
+├── coeff/                  # Member-specific P1–P2 coefficients
 ├── precip_profile/         # Monthly weather-regime precipitation profiles
 ├── original_forecast/      # Original real-time GRIB2 forecasts
 ├── rt_output/              # Intermediate and probability outputs

@@ -51,7 +51,8 @@ download_one() {
 
     # RealTime_ecmwf_forecast_down.py와 동일한 월별 저장 구조
     output_dir="${FORECAST_DIR}/${date_dir}/${output_name}"
-    filename="${grib_variable}.${init}"
+    # Keep the original NCEI filename unchanged.
+    filename="${grib_variable}.01.${init}.daily"
     url="${BASE_URL}/time-series/${year}/${year}${month}/${year}${month}${day}/${init}/${grib_variable}.01.${init}.daily.grb2"
     mkdir -p "$output_dir"
 

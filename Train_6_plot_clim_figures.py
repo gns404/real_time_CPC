@@ -169,7 +169,8 @@ def load_precip_profiles():
 
 
 def prepare_precip_lon(profiles):
-    return profiles.assign_coords(lon=((profiles.lon + 180) % 360) - 180).sortby("lon")
+    longitude = ((profiles.longitude + 180) % 360) - 180
+    return profiles.assign_coords(longitude=longitude).sortby("longitude")
 
 
 def common_precip_levels(profiles):
@@ -192,8 +193,8 @@ def plot_monthly_precip_profiles(profiles):
         for month, ax in enumerate(axes.flat, start=1):
             field = profiles.sel(wr=wr, month=month)
             plot = ax.contourf(
-                field.lon, field.lat, field,
-                levels=levels, cmap="Blues_r", extend="max",
+                field.longitude, field.latitude, field,
+                levels=levels, cmap="Blues", extend="max",
                 transform=ccrs.PlateCarree(),
             )
             add_map_base(ax, [-130, -65, 20, 50], states)

@@ -8,6 +8,11 @@ now = datetime.now()
 year = now.year
 month = now.month
 
+year = 2026
+month = 7
+
+ncep_dates = [4, 5, 6]
+
 base_dir = "original_forecast"
 date_str = f"{year}{month:02d}01"
 
@@ -39,6 +44,31 @@ client.retrieve(dataset, request).download(filepath)
 
 print(f"{filepath} download completed!")
 
+# CFSv2
+for day in ncep_dates:
+    y = str(year)
+    m = f"{month:02d}"
+    dd = f"{day:02d}"
+    dstr = f"{year}{month:02d}{day:02d}"
+
+    filepath = os.path.join(save_dir, f"NCEP_{dstr}.nc")
+
+    print(f"Downloading NCEP {dstr}")
+
+    request = {
+        "originating_centre": "ncep",
+        "system": "2",
+        "variable": ["total_precipitation"],
+        "year": [y],
+        "month": [m],
+        "day": [day],
+        "leadtime_hour": leadtime_hours,
+        "data_format": "netcdf"
+    }
+
+    client.retrieve(dataset, request).download(filepath)
+    print(f"{filepath} done")
+
 # ---------------------------
 # z500
 # ---------------------------
@@ -67,3 +97,31 @@ filepath = os.path.join(save_dir, filename)
 client.retrieve(dataset, request).download(filepath)
 
 print(f"{filepath} download completed!")
+
+# CFSv2
+for day in ncep_dates:
+    y = str(year)
+    m = f"{month:02d}"
+    dd = f"{day:02d}"
+    dstr = f"{year}{month:02d}{day:02d}"
+
+    filepath = os.path.join(save_dir, f"NCEP_{dstr}.nc")
+
+    print(f"Downloading NCEP {dstr}")
+
+    request = {
+        "originating_centre": "ncep",
+        "system": "2",
+        "variable": ["geopotential"],
+        "pressure_level": ["500"],
+        "year": [y],
+        "month": [m],
+        "day": [day],
+        "leadtime_hour": leadtime_hours,
+        "data_format": "netcdf"
+    }
+
+    client.retrieve(dataset, request).download(filepath)
+    print(f"{filepath} done")
+
+print("All downloads completed!")

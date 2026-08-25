@@ -16,23 +16,15 @@ MEMBERS = tuple(
 CPC_PATH = BASE_DIR / "cpc.201101-202208.cfsv2_native_grid.nc"
 CPC_HIST_PATH = BASE_DIR / "cpc.198101-201012.cfsv2_native_grid.nc"
 WRGMM_HIST_PATH = BASE_DIR / "CORe_WRGMM_monthly_precip.1981-2010.nc"
+PERIODS = range(1, 3)
 
 def get_period(year, month, period):
     init_month = pd.Timestamp(year, month, 1)
 
     if period == 1:
-        start = init_month + pd.DateOffset(days=15)
-        end = init_month + pd.offsets.MonthEnd(0)
-    elif period == 2:
         start = init_month + pd.DateOffset(months=1)
         end = start + pd.offsets.MonthEnd(0)
-    elif period == 3:
-        start = init_month + pd.DateOffset(months=2)
-        end = start + pd.offsets.MonthEnd(0)
-    elif period == 4:
-        start = init_month + pd.DateOffset(months=3)
-        end = start + pd.offsets.MonthEnd(0)
-    elif period == 5:
+    elif period == 2:
         start = init_month + pd.DateOffset(months=1)
         end = init_month + pd.DateOffset(months=3) + pd.offsets.MonthEnd(0)
 
@@ -131,9 +123,9 @@ def main():
 
         print(f"\n===== START {member} =====")
 
-        CPC = {period: [] for period in range(1, 6)}
-        CFSv2 = {period: [] for period in range(1, 6)}
-        CFSv2_WRGMM = {period: [] for period in range(1, 6)}
+        CPC = {period: [] for period in PERIODS}
+        CFSv2 = {period: [] for period in PERIODS}
+        CFSv2_WRGMM = {period: [] for period in PERIODS}
         missing = []
 
         for year in range(args.start_year, args.end_year + 1):
@@ -155,7 +147,7 @@ def main():
                     missing.append([ym, str(error)])
                     continue
 
-                for period in range(1, 6):
+                for period in PERIODS:
                     start, end = get_period(year, month, period)
 
                     temp_cpc = cpc_pr.sel(time=slice(start, end))
@@ -186,7 +178,7 @@ def main():
         member_output = OUTPUT_DIR / member
         member_output.mkdir(parents=True, exist_ok=True)
 
-        for period in range(1, 6):
+        for period in PERIODS:
             if len(CFSv2[period]) == 0:
                 print(f"NO VALID SAMPLE {member} P{period}")
                 sample_count_list.append([member, f"P{period}", 0, 120])
