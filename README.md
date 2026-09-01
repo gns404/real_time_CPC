@@ -13,6 +13,7 @@ All precipitation data and coefficients use the native CFSv2 Gaussian grid. The 
 
 ## Conda environment
 conda env create -f environment.yml
+
 conda activate wrgmm
 
 ## File organization
