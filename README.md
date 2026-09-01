@@ -11,6 +11,10 @@ All precipitation data and coefficients use the native CFSv2 Gaussian grid. The 
 | P1 | The next calendar month |
 | P2 | Three-month mean from the next through the third following month |
 
+## Conda environment
+conda env create -f environment.yml
+conda activate wrgmm
+
 ## File organization
 
 ### Training workflow: `Train_0`–`Train_6`
