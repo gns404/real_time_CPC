@@ -1,0 +1,17 @@
+name: wrgmm
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - numpy
+  - pandas
+  - xarray
+  - scipy
+  - scikit-learn
+  - netcdf4
+  - cfgrib
+  - eccodes
+  - matplotlib
+  - cartopy
+  - shapely
+  - cdsapi
