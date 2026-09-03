@@ -29,9 +29,9 @@ cb_2018_us_state_500k/**
 !cb_2018_us_state_500k/**/
 !cb_2018_us_state_500k/**/.gitkeep
 
-precip_profile/**
-!precip_profile/**/
-!precip_profile/**/.gitkeep
+#precip_profile/**
+#!precip_profile/**/
+#!precip_profile/**/.gitkeep
 
 # NetCDF, GRIB and model data
 *.nc
@@ -40,6 +40,9 @@ precip_profile/**
 *.grb2
 *.idx
 *.sav
+
+# Version the small monthly WR precipitation profiles only.
+!precip_profile/*.nc
 
 # Logs and temporary files
 *.log
